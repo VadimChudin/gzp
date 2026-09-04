@@ -1,0 +1,182 @@
+name: Build & Release GZP
+
+# Конвейер полностью автономный:
+#   тесты → компиляция MQL (.ex4/.ex5) → PyInstaller → Inno Setup → Release.
+# Пользователю нужна только ссылка на GZP_Setup .exe — ручная компиляция
+# в MetaEditor не требуется.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  # ── 1. Быстрая проверка логики: инварианты ТЗ ───────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run test suite (ТЗ invariants)
+        run: python -m pytest gzp_core/tests -v
+
+      - name: Render splash assets (headless check)
+        run: |
+          python -m gzp_core.app --render-assets build_assets
+          ls -la build_assets
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: splash-assets
+          path: build_assets/
+
+  # ── 2. Сборка продукта под Windows ──────────────────────────────────────────
+  build:
+    needs: test
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Resolve version metadata
+        id: meta
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path gzp_core/version.py -Pattern '^VERSION = "(.+)"').Matches.Groups[1].Value
+          $release = (Select-String -Path gzp_core/version.py -Pattern '^RELEASE = "(.+)"').Matches.Groups[1].Value
+          $build   = "$(Get-Date -Format 'yyyy.MM.dd').${{ github.run_number }}"
+          $commit  = "${{ github.sha }}".Substring(0,7)
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "release=$release" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "build=$build"     | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "commit=$commit"   | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "GZP $version $release build $build ($commit)"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Generate product icon
+        run: python installer/make_icon.py assets/gzp.ico
+
+      # ── MetaTrader 5: даёт metaeditor64.exe, которым компилируются и mq4, и mq5
+      - name: Install MetaTrader 5 (for MetaEditor)
+        shell: pwsh
+        run: |
+          $url = 'https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe'
+          Invoke-WebRequest -Uri $url -OutFile mt5setup.exe -UseBasicParsing
+          Start-Process -FilePath .\mt5setup.exe -ArgumentList '/auto' -Wait
+          Start-Sleep -Seconds 20
+
+      - name: Locate MetaEditor
+        id: metaeditor
+        shell: pwsh
+        run: |
+          $editor = $null
+          foreach ($i in 1..30) {
+            $editor = Get-ChildItem 'C:\Program Files' -Recurse -Filter 'metaeditor64.exe' -ErrorAction SilentlyContinue |
+                      Select-Object -First 1
+            if ($editor) { break }
+            Start-Sleep -Seconds 5
+          }
+          if (-not $editor) {
+            Write-Warning 'MetaEditor not found — .ex4/.ex5 will not be compiled'
+            "found=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          } else {
+            Write-Host "MetaEditor: $($editor.FullName)"
+            "found=true" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+            "path=$($editor.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          }
+
+      - name: Compile MQL indicators
+        if: steps.metaeditor.outputs.found == 'true'
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $editor = '${{ steps.metaeditor.outputs.path }}'
+          foreach ($src in @('mql\MT5\Indicators\GZP_Zones.mq5', 'mql\MT4\Indicators\GZP_Zones.mq4')) {
+            Write-Host "Compiling $src"
+            & $editor /compile:"$PWD\$src" /log:"$PWD\compile.log" | Out-Null
+            if (Test-Path compile.log) { Get-Content compile.log -Encoding Unicode | Write-Host }
+          }
+          Get-ChildItem mql -Recurse -Include *.ex4,*.ex5 | ForEach-Object { Write-Host "built: $($_.FullName)" }
+
+      - name: Build application (PyInstaller)
+        shell: pwsh
+        env:
+          GZP_ROOT: ${{ github.workspace }}
+          GZP_BUILD: ${{ steps.meta.outputs.build }}
+          GZP_COMMIT: ${{ steps.meta.outputs.commit }}
+        run: |
+          pyinstaller --noconfirm --clean installer/GZP.spec
+          if (-not (Test-Path 'dist/GZP/GZP.exe')) { throw 'GZP.exe was not produced' }
+
+      - name: Build installer (Inno Setup)
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files (x86)\Inno Setup 6\ISCC.exe'
+          if (-not (Test-Path $iscc)) {
+            choco install innosetup -y --no-progress
+          }
+          & $iscc /DAppVersion=${{ steps.meta.outputs.version }} /DAppRelease=${{ steps.meta.outputs.release }} installer\setup.iss
+          Get-ChildItem dist -Filter *.exe | ForEach-Object { Write-Host "installer: $($_.Name)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: GZP_Setup_${{ steps.meta.outputs.version }}_${{ steps.meta.outputs.release }}
+          path: |
+            dist/GZP_Setup_*.exe
+            mql/**/*.ex4
+            mql/**/*.ex5
+          if-no-files-found: warn
+
+      # ── Публикация релиза по тегу v* ──────────────────────────────────────
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: GZP ${{ steps.meta.outputs.version }} ${{ steps.meta.outputs.release }}
+          body: |
+            **GZP — Gold Zone Pro ${{ steps.meta.outputs.version }} (${{ steps.meta.outputs.release }})**
+
+            Сборка: `${{ steps.meta.outputs.build }}` · коммит `${{ steps.meta.outputs.commit }}`
+
+            Установка: скачайте `GZP_Setup_*.exe` и запустите.
+            Индикатор автоматически ставится в найденные терминалы MetaTrader 4 и 5
+            и появляется на графике.
+
+            В комплекте:
+            * зоны по конфлюенсу H4 + H1 + S/R (walk-forward, без look-ahead);
+            * индикаторы `GZP_Zones` для MT4 и MT5;
+            * загрузочный экран с таблицей версии и релиза.
+          files: |
+            dist/GZP_Setup_*.exe
+            mql/MT4/Indicators/GZP_Zones.ex4
+            mql/MT5/Indicators/GZP_Zones.ex5
+          fail_on_unmatched_files: false

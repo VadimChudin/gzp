@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+
+# Сборка
+build/
+dist/
+build_assets/
+*.spec.bak
+.pytest_cache/
+assets/splash_loading.gif
+
+# Скомпилированные индикаторы: их собирает CI, в репозитории они не нужны
+*.ex4
+*.ex5
+
+# Локальные данные и вывод
+output/
+gzp_core/data/*.csv
+*.log
+compile.log
+
+# Иконка генерируется скриптом при сборке
+assets/gzp.ico
+assets/splash_loading.gif
+__pycache__/
+.pytest_cache/
+
+# ОС
+.DS_Store
+Thumbs.db
