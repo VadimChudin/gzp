@@ -1,7 +1,7 @@
-"""Генерация иконки продукта GZP из фирменного стиля.
+"""Генерация иконки продукта GZP.
 
-Запускается в CI перед сборкой инсталлятора: assets/gzp.ico строится из того же
-латунного градиента, что и загрузочный экран, — стиль остаётся единым.
+Не зависит от внутренних функций branding.py — CI собирает ico до
+PyInstaller, и падение здесь раньше останавливало весь Windows-job.
 """
 
 from __future__ import annotations
@@ -9,31 +9,63 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
-from PIL import Image, ImageDraw  # noqa: E402
-
-from gzp_core import branding  # noqa: E402
-
+BG = (8, 7, 6)
+GOLD_DEEP = (122, 86, 28)
+GOLD = (212, 162, 74)
+GOLD_LIGHT = (255, 224, 160)
 SIZES = [(256, 256), (128, 128), (64, 64), (48, 48), (32, 32), (16, 16)]
+
+
+def _font(size: int) -> ImageFont.FreeTypeFont:
+    for path in (
+        "C:/Windows/Fonts/georgiab.ttf",
+        "C:/Windows/Fonts/timesbd.ttf",
+        "C:/Windows/Fonts/segoeuib.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ):
+        if Path(path).exists():
+            try:
+                return ImageFont.truetype(path, size)
+            except OSError:
+                continue
+    return ImageFont.load_default()
 
 
 def build_icon(out_path: Path) -> Path:
     size = 256
-    img = Image.new("RGB", (size, size), branding.BG_DEEP)
+    img = Image.new("RGB", (size, size), BG)
     draw = ImageDraw.Draw(img)
+    draw.rounded_rectangle(
+        [8, 8, size - 9, size - 9],
+        radius=48,
+        fill=(14, 12, 10),
+        outline=GOLD_DEEP,
+        width=4,
+    )
 
-    # Плашка со скруглением и тонкой золотой рамкой.
-    draw.rounded_rectangle([6, 6, size - 7, size - 7], radius=46, fill=(14, 15, 18),
-                           outline=branding.GOLD_DEEP, width=3)
-    # Монограм тем же латунным градиентом, что и на загрузочном экране.
-    branding.draw_gold_text(img, (size // 2, size // 2 - 6), "GZP",
-                            branding.serif(88), shimmer=0.45, glow=True)
+    font = _font(78)
+    text = "GZP"
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    x = (size - tw) // 2 - bbox[0]
+    y = (size - th) // 2 - bbox[1] - 4
+
+    glow = Image.new("L", (size, size), 0)
+    ImageDraw.Draw(glow).text((x, y), text, font=font, fill=180)
+    glow = glow.filter(ImageFilter.GaussianBlur(10))
+    warm = Image.new("RGB", (size, size), GOLD)
+    img.paste(Image.composite(warm, img, glow), (0, 0))
+    draw = ImageDraw.Draw(img)
+    draw.text((x, y), text, font=font, fill=GOLD_LIGHT)
+
+    out_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(out_path, format="ICO", sizes=SIZES)
     return out_path
 
 
 if __name__ == "__main__":
     target = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("assets/gzp.ico")
-    target.parent.mkdir(parents=True, exist_ok=True)
     print(f"icon written: {build_icon(target)}")
