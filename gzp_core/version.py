@@ -12,10 +12,10 @@ PRODUCT = "GZP"
 PRODUCT_FULL = "GZP — Gold Zone Pro"
 
 # Семантическая версия продукта.
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 # Номер релиза: человекочитаемая метка выпуска, растёт монотонно.
-RELEASE = "R2"
+RELEASE = "R3"
 
 # Канал поставки: stable | beta | dev
 CHANNEL = "stable"

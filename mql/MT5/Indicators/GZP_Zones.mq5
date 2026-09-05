@@ -12,7 +12,7 @@
 #property indicator_chart_window
 
 // Номер сборки подставляет CI при компиляции релиза.
-#define GZP_BUILD_STAMP "R2"
+#define GZP_BUILD_STAMP "R3"
 #define GZP_SCHEMA      1
 #define PREFIX          "GZP_"
 

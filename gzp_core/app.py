@@ -34,6 +34,32 @@ from gzp_core.models import Candle
 POLL_SECONDS = 60
 
 
+def resource_root() -> Path:
+    """Корень поставки: исходники, GZP.exe или каталог PyInstaller.
+
+    Установщик кладёт индикаторы в {app}\\mql. Замороженный exe ищет их рядом
+    с собой и в _MEIPASS — иначе патч терминалов ставит пустую папку.
+    """
+    candidates: list[Path] = []
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            candidates.append(Path(meipass))
+        exe_dir = Path(sys.executable).resolve().parent
+        candidates.append(exe_dir)
+        candidates.append(exe_dir / "_internal")
+    candidates.append(Path(__file__).resolve().parent.parent)
+    for root in candidates:
+        if (root / "mql").exists():
+            return root
+    return candidates[0]
+
+
+def mql_payload_dirs() -> list[Path]:
+    root = resource_root() / "mql"
+    return [root / "MT4" / "Indicators", root / "MT5" / "Indicators"]
+
+
 # ── Загрузка данных ──────────────────────────────────────────────────────────
 
 
@@ -159,8 +185,6 @@ def main(argv: list[str] | None = None) -> int:
     if args.render_assets:
         return render_assets(Path(args.render_assets))
 
-    payload_dir = Path(__file__).resolve().parent.parent / "mql"
-
     if args.unpatch:
         terminals = mt_patcher.discover_terminals()
         for t in terminals:
@@ -169,11 +193,15 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.patch_only:
-        candidates = [payload_dir / "MT4" / "Indicators", payload_dir / "MT5" / "Indicators"]
         code = 0
-        for c in candidates:
+        found = False
+        for c in mql_payload_dirs():
             if c.exists():
+                found = True
                 code |= do_patch(c)
+        if not found:
+            print(f"MQL payload not found next to {resource_root()}")
+            return 1
         return code
 
     cfg = Config.from_env()
@@ -206,7 +234,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.demo:
         return service_loop(cfg, data_dir, once=True)
 
-    for c in (payload_dir / "MT4" / "Indicators", payload_dir / "MT5" / "Indicators"):
+    for c in mql_payload_dirs():
         if c.exists():
             do_patch(c)
 

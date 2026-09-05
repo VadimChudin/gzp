@@ -160,8 +160,8 @@ def test_unpatch_restores_user_template(tmp_path, monkeypatch):
 
 def test_version_table_shows_version_and_release():
     table = dict(version.version_table())
-    assert table["VERSION"] == version.VERSION == "1.0.1"
-    assert table["RELEASE"] == version.RELEASE == "R2"
+    assert table["VERSION"] == version.VERSION == "1.0.2"
+    assert table["RELEASE"] == version.RELEASE == "R3"
     assert table["PRODUCT"].startswith("GZP")
 
 
@@ -183,7 +183,7 @@ def test_entry_script_runs_as_main(monkeypatch, capsys):
     with pytest.raises(SystemExit) as exc:
         runpy.run_path(str(entry), run_name="__main__")
     assert exc.value.code == 0
-    assert "GZP v1.0.1 R2" in capsys.readouterr().out
+    assert "GZP v1.0.2 R3" in capsys.readouterr().out
 
 
 def test_splash_frames_render_headless():
@@ -200,6 +200,17 @@ def test_splash_frames_render_headless():
     y = int(h * 0.598) + 4
     x0, x1 = w // 2 - 40, w // 2 + 40
     assert empty.crop((x0, y - 2, x1, y + 2)).tobytes() != full.crop((x0, y - 2, x1, y + 2)).tobytes()
+
+
+def test_resource_root_finds_mql_payload():
+    """Единый установочник обязан нести mql рядом с приложением."""
+    from gzp_core.app import mql_payload_dirs, resource_root
+
+    root = resource_root()
+    assert (root / "mql").is_dir()
+    dirs = mql_payload_dirs()
+    assert any((d / "GZP_Zones.mq4").exists() for d in dirs)
+    assert any((d / "GZP_Zones.mq5").exists() for d in dirs)
 
 
 def test_unlock_frame_masks_password():

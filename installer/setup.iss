@@ -1,18 +1,16 @@
 ; Inno Setup — установщик GZP (Gold Zone Pro)
 ;
-; Что делает установщик:
-;   1. ставит приложение в Program Files;
-;   2. создаёт ярлыки;
-;   3. запускает патч терминалов MT4/MT5 (индикатор появляется сам);
-;   4. при удалении откатывает патч и возвращает шаблоны графиков.
+; Единый установочник. В одном GZP_Setup_*.exe:
+;   приложение, сплэш, индикаторы MT4/MT5 (.mq4/.mq5 и скомпилированные .ex*),
+;   патч терминалов. Отдельные .ex4/.ex5 пользователю не нужны.
 ;
 ; Версия и номер релиза приходят из CI через /DAppVersion и /DAppRelease.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.1"
+  #define AppVersion "1.0.2"
 #endif
 #ifndef AppRelease
-  #define AppRelease "R2"
+  #define AppRelease "R3"
 #endif
 
 #define AppName "GZP"

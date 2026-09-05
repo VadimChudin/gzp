@@ -136,6 +136,10 @@ jobs:
         run: |
           pyinstaller --noconfirm --clean installer/GZP.spec
           if (-not (Test-Path 'dist/GZP/GZP.exe')) { throw 'GZP.exe was not produced' }
+          New-Item -ItemType Directory -Force -Path dist/GZP/mql | Out-Null
+          Copy-Item -Recurse -Force mql\* dist/GZP/mql\
+          Get-ChildItem dist/GZP/mql -Recurse -Include *.mq4,*.mq5,*.ex4,*.ex5 |
+            ForEach-Object { Write-Host "bundled: $($_.FullName)" }
 
       - name: Build installer (Inno Setup)
         shell: pwsh
@@ -150,11 +154,8 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: GZP_Setup_${{ steps.meta.outputs.version }}_${{ steps.meta.outputs.release }}
-          path: |
-            dist/GZP_Setup_*.exe
-            mql/**/*.ex4
-            mql/**/*.ex5
-          if-no-files-found: warn
+          path: dist/GZP_Setup_*.exe
+          if-no-files-found: error
 
       # ── Публикация релиза по тегу v* ──────────────────────────────────────
       - name: Publish GitHub Release
@@ -167,16 +168,13 @@ jobs:
 
             Сборка: `${{ steps.meta.outputs.build }}` · коммит `${{ steps.meta.outputs.commit }}`
 
-            Установка: скачайте `GZP_Setup_*.exe` и запустите.
-            Индикатор автоматически ставится в найденные терминалы MetaTrader 4 и 5
-            и появляется на графике.
+            Один файл: `GZP_Setup_*.exe`.
+            Внутри — приложение, индикаторы MT4/MT5 и патч терминалов.
+            Отдельные `.ex4`/`.ex5` не нужны: установщик ставит их сам.
 
             В комплекте:
             * зоны по конфлюенсу H4 + H1 + S/R (walk-forward, без look-ahead);
             * индикаторы `GZP_Zones` для MT4 и MT5;
             * загрузочный экран с таблицей версии и релиза.
-          files: |
-            dist/GZP_Setup_*.exe
-            mql/MT4/Indicators/GZP_Zones.ex4
-            mql/MT5/Indicators/GZP_Zones.ex5
-          fail_on_unmatched_files: false
+          files: dist/GZP_Setup_*.exe
+          fail_on_unmatched_files: true
