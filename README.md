@@ -1,6 +1,6 @@
 # GZP — Gold Zone Pro
 
-**v1.0.0 · R1 · stable**
+**v1.0.1 · R2 · stable**
 
 Индикатор сильных ценовых зон XAU/USD для MetaTrader 4 и 5.
 Второй, независимый алгоритм: зона рождается только из **конфлюенса**
@@ -127,8 +127,8 @@ installer/        PyInstaller + Inno Setup + генератор иконки
 ```json
 {
   "schema": 1,
-  "version": "1.0.0",
-  "release": "R1",
+  "version": "1.0.1",
+  "release": "R2",
   "symbol": "XAUUSD",
   "zones": [
     {
@@ -157,7 +157,7 @@ installer/        PyInstaller + Inno Setup + генератор иконки
 Тег `v*` запускает публикацию:
 
 ```bash
-git tag v1.0.0 && git push origin v1.0.0
+git tag v1.0.1 && git push origin v1.0.1
 ```
 
 CI прогоняет тесты, компилирует `.ex4/.ex5` в MetaEditor, собирает `GZP.exe`

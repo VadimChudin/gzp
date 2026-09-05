@@ -22,14 +22,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import branding, exporter, mt_patcher, splash, version
-from .auth import AttemptGuard
-from .config import Config
-from .data_feed import load_csv, load_mt5, resample, synth_series
-from .engine import ZoneEngine
-from .indicators import atr_at
-from .lifecycle import ZoneLifecycle
-from .models import Candle
+from gzp_core import branding, exporter, mt_patcher, splash, version
+from gzp_core.auth import AttemptGuard
+from gzp_core.config import Config
+from gzp_core.data_feed import load_csv, load_mt5, resample, synth_series
+from gzp_core.engine import ZoneEngine
+from gzp_core.indicators import atr_at
+from gzp_core.lifecycle import ZoneLifecycle
+from gzp_core.models import Candle
 
 POLL_SECONDS = 60
 

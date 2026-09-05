@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import json
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
+
+import pytest
 
 from gzp_core import auth, branding, exporter, mt_patcher, version
 from gzp_core.models import Direction, ScoreBreakdown, Zone, ZoneGrade, ZoneState
@@ -156,9 +160,30 @@ def test_unpatch_restores_user_template(tmp_path, monkeypatch):
 
 def test_version_table_shows_version_and_release():
     table = dict(version.version_table())
-    assert table["VERSION"] == version.VERSION == "1.0.0"
-    assert table["RELEASE"] == version.RELEASE == "R1"
+    assert table["VERSION"] == version.VERSION == "1.0.1"
+    assert table["RELEASE"] == version.RELEASE == "R2"
     assert table["PRODUCT"].startswith("GZP")
+
+
+def test_frozen_entry_has_no_relative_imports():
+    """Inno/PyInstaller запускают gzp.py как скрипт — relative import там запрещён."""
+    src = Path(__file__).resolve().parents[2] / "gzp.py"
+    text = src.read_text(encoding="utf-8")
+    code = text.split('"""', 2)[-1]
+    assert "from ." not in code
+    assert "from gzp_core.app import main" in code
+
+
+def test_entry_script_runs_as_main(monkeypatch, capsys):
+    """Имитация GZP.exe: файл исполняется с пустым __package__."""
+    import runpy
+
+    entry = Path(__file__).resolve().parents[2] / "gzp.py"
+    monkeypatch.setattr(sys, "argv", ["gzp.py", "--version"])
+    with pytest.raises(SystemExit) as exc:
+        runpy.run_path(str(entry), run_name="__main__")
+    assert exc.value.code == 0
+    assert "GZP v1.0.1 R2" in capsys.readouterr().out
 
 
 def test_splash_frames_render_headless():

@@ -9,10 +9,10 @@
 ; Версия и номер релиза приходят из CI через /DAppVersion и /DAppRelease.
 
 #ifndef AppVersion
-  #define AppVersion "1.0.0"
+  #define AppVersion "1.0.1"
 #endif
 #ifndef AppRelease
-  #define AppRelease "R1"
+  #define AppRelease "R2"
 #endif
 
 #define AppName "GZP"
