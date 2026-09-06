@@ -139,6 +139,16 @@ class Splash(_Window):
         self.close()
 
 
+
+def sanitize_paste(text: str) -> str:
+    """Оставляет только печатные символы пароля; убирает перевод строки из буфера."""
+    if not text:
+        return ""
+    # Пароль — одна строка: берём первую непустую строку, если скопировали с Enter.
+    first = text.replace("\r\n", "\n").replace("\r", "\n").split("\n", 1)[0]
+    return "".join(ch for ch in first if ch.isprintable())
+
+
 class UnlockDialog(_Window):
     """Экран ввода пароля продукта."""
 
@@ -153,12 +163,23 @@ class UnlockDialog(_Window):
         self.root.bind("<Return>", lambda _e: self._submit())
         self.root.bind("<BackSpace>", lambda _e: self._backspace())
         self.root.bind("<Escape>", lambda _e: self._cancel())
+        self.root.bind("<Control-v>", self._paste)
+        self.root.bind("<Control-V>", self._paste)
+        self.root.bind("<Command-v>", self._paste)
+        self.root.bind("<Shift-Insert>", self._paste)
+        self.root.bind("<<Paste>>", self._paste)
         self.canvas.bind("<Button-1>", self._on_click)
+        self.canvas.bind("<Button-3>", self._paste)
+        self.canvas.bind("<Control-Button-1>", self._paste)
 
     # ── Ввод ─────────────────────────────────────────────────────────────────
 
     def _on_key(self, event) -> None:
         if event.keysym in ("Return", "BackSpace", "Escape", "Tab"):
+            return
+        # Ctrl / Command / Alt — не печатаем символ (иначе Ctrl+V добавит «v»).
+        state = int(getattr(event, "state", 0) or 0)
+        if state & 0x4 or state & 0x8:
             return
         if event.char and event.char.isprintable():
             self.password += event.char
@@ -167,6 +188,18 @@ class UnlockDialog(_Window):
     def _backspace(self) -> None:
         self.password = self.password[:-1]
         self.error = None
+
+    def _paste(self, _event=None) -> str:
+        """Вставка из буфера обмена в поле пароля (Ctrl+V / Cmd+V / Shift+Insert / ПКМ)."""
+        try:
+            clip = self.root.clipboard_get()
+        except Exception:
+            return "break"
+        cleaned = sanitize_paste(clip)
+        if cleaned:
+            self.password += cleaned
+            self.error = None
+        return "break"
 
     def _on_click(self, event) -> None:
         # Клик по кнопке UNLOCK.

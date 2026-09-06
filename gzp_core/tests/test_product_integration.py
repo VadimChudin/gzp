@@ -96,6 +96,16 @@ def test_bruteforce_is_locked_out():
     assert guard.check("Satpayeva82/2") is False
 
 
+def test_sanitize_paste_keeps_password_chars():
+    from gzp_core.splash import sanitize_paste
+
+    assert sanitize_paste("Satpayeva82/2") == "Satpayeva82/2"
+    assert sanitize_paste("Satpayeva82/2\n") == "Satpayeva82/2"
+    assert sanitize_paste("Satpayeva82/2\r\nextra") == "Satpayeva82/2"
+    assert sanitize_paste("") == ""
+    assert sanitize_paste("ab\x00c") == "abc"
+
+
 # ── Патч терминалов MT4/MT5 ──────────────────────────────────────────────────
 
 

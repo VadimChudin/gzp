@@ -122,24 +122,15 @@ def _bar_geometry(w: int, h: int) -> tuple[int, int, int, int]:
 
 
 def _cover_static_bar(img: Image.Image) -> Image.Image:
-    """Гасим нарисованный на референсе неподвижный бар и подпись LOADING."""
+    """Гасим только неподвижный бар на референсе — сферу и LOADING не трогаем."""
     w, h = img.size
     x, y, bw, bh = _bar_geometry(w, h)
     overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(overlay)
-    # Только сам исходный бар — без большой чёрной капсулы вокруг сферы.
     d.rounded_rectangle(
-        [x - 4, y - 3, x + bw + 4, y + bh + 3],
-        radius=(bh + 6) // 2,
-        fill=(10, 8, 6, 220),
-    )
-    # Исходная подпись LOADING под баром.
-    d.rectangle([x + 40, y + bh + 6, x + bw - 40, y + bh + 22], fill=(8, 7, 6, 210))
-    # Нижний баннер — место под таблицу версии.
-    d.rounded_rectangle(
-        [int(w * 0.18), int(h * 0.80), int(w * 0.82), h - 8],
-        radius=14,
-        fill=(4, 3, 3, 230),
+        [x - 2, y - 2, x + bw + 2, y + bh + 2],
+        radius=(bh + 4) // 2,
+        fill=(10, 8, 6, 235),
     )
     return Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
 
@@ -225,45 +216,13 @@ def draw_orbit_beads(img: Image.Image, t: float) -> None:
 # ── Таблица версии ───────────────────────────────────────────────────────────
 
 
-def draw_version_table(
-    img: Image.Image,
-    rows: list[tuple[str, str]],
-    reveal: float,
-) -> None:
-    """Компактная таблица версии/релиза под сферой — как просили в ТЗ продукта."""
+def draw_version_footer(img: Image.Image, rows: list[tuple[str, str]]) -> None:
+    """Одна строка версии в нижнем баннере референса, без таблицы поверх сферы."""
+    data = {k.upper(): v for k, v in rows}
+    line = f"{data.get('PRODUCT', 'GZP')}   v{data.get('VERSION', '')}   {data.get('RELEASE', '')}"
     w, h = img.size
-    visible = max(0, min(len(rows), math.ceil(reveal * len(rows))))
-    if visible == 0:
-        return
-
-    label_f = sans(11)
-    value_f = mono(12)
-    row_h = 15
-    table_h = visible * row_h + 6
-    table_w = int(w * 0.50)
-    left = (w - table_w) // 2
-    top = h - table_h - 18
-
-    overlay = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(overlay)
-    d.rounded_rectangle(
-        [left - 14, top - 10, left + table_w + 14, top + table_h],
-        radius=12,
-        fill=(6, 5, 4, 150),
-        outline=(90, 70, 36, 160),
-    )
-    img.paste(Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB"))
-
     draw = ImageDraw.Draw(img)
-    for i, (label, value) in enumerate(rows[:visible]):
-        y = top + i * row_h
-        draw.text((left, y), label.upper(), font=label_f, fill=TEXT_DIM, anchor="lm")
-        vx = left + int(table_w * 0.42)
-        draw.text((vx, y), value, font=value_f, fill=TEXT_SOFT, anchor="lm")
-        lead_s = left + int(draw.textlength(label.upper(), font=label_f)) + 10
-        lead_e = vx - 12
-        if lead_e > lead_s:
-            draw.line([(lead_s, y), (lead_e, y)], fill=HAIRLINE, width=1)
+    draw.text((w // 2, int(h * 0.905)), line, font=sans(11), fill=TEXT_DIM, anchor="mm")
 
 
 # ── Кадры ────────────────────────────────────────────────────────────────────
@@ -276,32 +235,11 @@ def render_splash_frame(
     t: float,
     size: tuple[int, int] = (WIDTH, HEIGHT),
 ) -> Image.Image:
-    """Один кадр загрузочного экрана: сфера + живой бар + таблица версии."""
+    """Один кадр: ваш референс + живой бар. Без таблицы и лишнего LOADING."""
     img = _base_art(size).copy()
     img = _cover_static_bar(img)
-    img = _vignette(img, 0.35)
-
-    # Лёгкое дыхание сферы.
-    pulse = 1.0 + 0.012 * math.sin(t * 1.6)
-    if abs(pulse - 1.0) > 0.002:
-        w, h = img.size
-        nw, nh = int(w * pulse), int(h * pulse)
-        zoomed = img.resize((nw, nh), Image.BILINEAR)
-        left, top = (nw - w) // 2, (nh - h) // 2
-        img = zoomed.crop((left, top, left + w, top + h))
-
-    draw_orbit_beads(img, t)
     draw_progress(img, progress, t)
-
-    draw = ImageDraw.Draw(img)
-    w, h = img.size
-    x, y, bw, bh = _bar_geometry(w, h)
-    dots = "." * (1 + int(t * 2.4) % 3)
-    caption = "R E A D Y" if progress >= 0.995 else f"L O A D I N G {dots}"
-    draw.text((w // 2, y + bh + 14), caption, font=sans(9), fill=TEXT_DIM, anchor="mm")
-
-    reveal = min(1.0, 0.35 + t * 0.9)
-    draw_version_table(img, rows, reveal)
+    draw_version_footer(img, rows)
     return img
 
 
